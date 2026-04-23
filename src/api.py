@@ -2,6 +2,10 @@ import torch
 import faiss
 import numpy as np
 import pickle
+import sys
+import os
+import time
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 from fastapi import FastAPI, HTTPException
 from generate_data import load_data, encode_data
 from model import TwoTowerModel
@@ -29,11 +33,16 @@ def recommend(user_id: int, k: int = 10):
         raise HTTPException(status_code=404, detail=f"Utilisateur {user_id} inconnu")
 
     user_idx = torch.tensor([user2idx[user_id]])
+
+    t0 = time.perf_counter()
+
     with torch.no_grad():
         user_vec = model.user_tower(user_idx).numpy()
 
     faiss.normalize_L2(user_vec)
     scores, indices = index.search(user_vec, k)
+
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
     results = []
     for score, idx in zip(scores[0], indices[0]):
@@ -49,6 +58,7 @@ def recommend(user_id: int, k: int = 10):
 
     return {
         "user_id": user_id,
+        "latency_ms": latency_ms,
         "recommendations": results
     }
 
